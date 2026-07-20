@@ -1,4 +1,5 @@
 # NISAR GCOV Product Analysis for Crop Identification
+Part of the code developed here was based on the code present in the [NISAR Cookbook](https://github.com/ASFOpenSARlab/NISAR_Cookbook/tree/main).
 
 ## Polarizations:
 A **Horizontal-Horizontal** (HH) polarization (co-polarized) means that the radar both transmits and receives horizontally polarized waveforms.
@@ -22,8 +23,22 @@ They are done independently for each polarization because HH tracks the surface 
 
 The final product should be interpreted as:
 * **White/Gray/Black:** no change happened among the three dates;
-* **Solid color (red, blue, or green):** the signal was the highest on the respective date and lowest in the other dates. Example: If a region shows solid red, it means that the signal was highest on day 1 and low on days 2 and 3.
+* **Solid color (red, blue, or green):** the signal was the highest on the respective date and lowest on the other dates. Example: If a region shows solid red, it means that the signal was highest on day 1 and low on days 2 and 3.
 * **Composite colors:**
   * Yellow (red + green): high backscatter on days 1 and 2, but dropped on day 3.
   * Cyan (green + blue): low backscatter on day 1, but high on days 2 and 3.
   * Magenta (red + blue): high backscatter on days 1 and 3, but dropped in the middle on day 2.
+
+### Hybrid
+This RGB composite is made by taking the statistics of the available data and combining them as follows:
+* **Red:** median of HH polarization - represents bare surface
+* **Green:** median of HV - represents vegetated area
+* **Blue:** standard deviation of HV - detects changes in the vegetated area
+This approach was followed according to [this NASA example](https://science.nasa.gov/earth/earth-observatory/painting-the-growing-season-in-the-maize-triangle/.)
+
+The final product should be interpreted as:
+* **Blue:** this signals active agricultural fields. A high standard deviation means the volume of the vegetation is changing over time.
+* **Green:** this represents permanent vegetation (high median HV but low standard deviation HV)
+*  **Red:** this represents bare ground given the high median HH across all dates.
+*  **Black:** low returns across all metrics, which can mean smooth surfaces (example: water).
+
