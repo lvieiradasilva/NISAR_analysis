@@ -33,7 +33,8 @@ The final product should be interpreted as:
 This RGB composite is made by taking the statistics of the available data and combining them as follows:
 * **Red:** median of HH polarization - represents bare surface
 * **Green:** median of HV - represents vegetated area
-* **Blue:** standard deviation of HV - detects changes in the vegetated area
+* **Blue:** standard deviation of HV - detects changes in the vegetated area.
+
 This approach was followed according to [this NASA example](https://science.nasa.gov/earth/earth-observatory/painting-the-growing-season-in-the-maize-triangle/.)
 
 The final product should be interpreted as:
