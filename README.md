@@ -29,6 +29,18 @@ The final product should be interpreted as:
   * Cyan (green + blue): low backscatter on day 1, but high on days 2 and 3.
   * Magenta (red + blue): high backscatter on days 1 and 3, but dropped in the middle on day 2.
 
+### Polarimetric
+This is done by taking the statistics of the available data and combining them as follows:
+* **Red:** median of HH polarization - represents bare surface
+* **Green:** median of HV - represents vegetated area
+* **Blue:** ratio HH/HV.
+
+This tells about the physical geometry of the landscape.
+* **Green:** stable vegetation;
+* **Red/Magenta:** permanent rough surfaces
+* **Blue:** surface scattering
+
+
 ### Hybrid
 This RGB composite is made by taking the statistics of the available data and combining them as follows:
 * **Red:** median of HH polarization - represents bare surface
