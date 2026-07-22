@@ -12,7 +12,7 @@ import xarray as xr
 import rioxarray
 
 # get functions and data from main scripts and rgb_composite.py
-from nisar_change_detection import load_time_series, OUTPUT_DIR
+from nisar_change_detection import load_time_series, clip_cube_to_shapefile, OUTPUT_DIR, STUDY_AREA
 from rgb_composite import normalize
 
 def export_hybrid_rgb(datacube, epsg_code):
@@ -49,6 +49,7 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     #load the datacube
     datacube, epsg_code =load_time_series()
+    datacube = clip_cube_to_shapefile(datacube, STUDY_AREA, epsg_code=32724) # clip the cube to the study area using the shapefile
     # export the hybrid composite
     export_hybrid_rgb(datacube, epsg_code)
     
