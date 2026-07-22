@@ -22,10 +22,13 @@ import rioxarray
 import h5py
 import pandas as pd
 import re
+import geopandas as gpd
+from shapely.geometry import mapping
 
 ## GLOBAL VARIABLES
 INPUT_DIR = r"C:\Users\letii\Desktop\NISAR\initial_test\GCOV_data"
 OUTPUT_DIR = r"C:\Users\letii\Desktop\NISAR\initial_test\test_outputs"
+STUDY_AREA = r"C:\Users\letii\Desktop\NISAR\araripe_plateau\apa_chapada_araripe\study_Area_Clip.shp" # clipping shapefile for the study area
 GROUP_PATH = "/science/LSAR/GCOV/grids/frequencyA" #according to how NISAR data is structured in HDF5
 
 #################### DATA SETUP FUNCTIONS ##########################################################
@@ -189,6 +192,25 @@ def export_to_geotiff(mask, epsg_code, output_filepath):
     print("GeoTIFF Export complete!")
 
 
+def clip_cube_to_shapefile(cube, STUDY_AREA, epsg_code):
+    print("Clipping Data Cube to Study Area")
+    
+    #Filter the dataset to keep variables that have x/y coordinates
+    spatial_vars = [var for var in cube.data_vars if 'x' in cube[var].dims]
+    cube_spatial = cube[spatial_vars]
+    
+    cube_spatial = cube_spatial.rio.set_spatial_dims(x_dim="x", y_dim="y")
+    cube_spatial.rio.write_crs(f"EPSG:{epsg_code}", inplace=True)
+    
+    #read and match radar data
+    gdf = gpd.read_file(STUDY_AREA)
+    gdf = gdf.to_crs(f"EPSG:{epsg_code}")
+    
+    # Clip the cube to the shapefile geometry
+    clipped_cube = cube_spatial.rio.clip(gdf.geometry.apply(mapping), gdf.crs, drop=True)
+    
+    print(f"Clipped shape!")
+    return clipped_cube
 
 #################### MAIN FUNCTION ##########################################################
 
@@ -204,6 +226,7 @@ def main():
     try:
         #load the time series data and get the native EPSG code
         cube, native_epsg =load_time_series()
+        cube = clip_cube_to_shapefile(cube, STUDY_AREA, epsg_code=32724)
         
         #calculate metrics for both polarizations, returning cv maps and sampled arrays for plotting
         cv_hv_lazy,cv_hv_sample,var_hv_sample= compute_metrics(cube, "HVHV")
@@ -228,7 +251,7 @@ def main():
         
     except Exception as e:
         import traceback
-        print(f"\nScript failed with error: {e}")
+        print(f"Script failed with error: {e}")
         traceback.print_exc()
 
 
