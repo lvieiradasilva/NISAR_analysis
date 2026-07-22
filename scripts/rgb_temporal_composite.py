@@ -9,7 +9,7 @@ import xarray as xr
 import rioxarray
 
 #import the load_time_series function and OUTPUT_DIR from nisar_change_detection.py
-from nisar_change_detection import load_time_series, OUTPUT_DIR
+from nisar_change_detection import load_time_series, clip_cube_to_shapefile, OUTPUT_DIR, STUDY_AREA
 
 ########### FUNCTIONS ###############################################
 
@@ -74,6 +74,7 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
     cube, epsg_code=load_time_series()
+    cube= clip_cube_to_shapefile(cube, STUDY_AREA, epsg_code=32724) # clip the cube to the study area using the shapefile
 
     # create two RGB composites for the two polarizations: HVHV and HHHH
     export_rgb_composite(cube, "HVHV", epsg_code)
