@@ -24,13 +24,16 @@ import pandas as pd
 import re
 import geopandas as gpd
 from shapely.geometry import mapping
+import warnings
+
+warnings.filterwarnings('ignore') # ignore rioxarray warnings
 
 ## GLOBAL VARIABLES
 INPUT_DIR = r"C:\Users\letii\Desktop\NISAR\initial_test\GCOV_data"
 OUTPUT_DIR = r"C:\Users\letii\Desktop\NISAR\initial_test\test_outputs"
 STUDY_AREA = r"C:\Users\letii\Desktop\NISAR\araripe_plateau\apa_chapada_araripe\study_Area_Clip.shp" # clipping shapefile for the study area
 GROUP_PATH = "/science/LSAR/GCOV/grids/frequencyA" #according to how NISAR data is structured in HDF5
-
+CACHE_FILE = os.path.join(OUTPUT_DIR, 'clipped_datacube.nc') # this is the netcdf file path
 #################### DATA SETUP FUNCTIONS ##########################################################
 def validate_hdf5_files():
     """
@@ -73,9 +76,21 @@ def extract_timestamps(file_paths):
 def load_time_series():
     """ Loads the time-series data from valid HDF5 files, 
     ensuring proper dimension naming and coordinate mapping.
+    Clips the data early and caches the output as a NetCDF file to speed up processing.
     Returns an xarray Dataset representing the time-series cube and the native EPSG code.
     """
+    os.makedir(OUTPUT_DIR, exist_ok=True)
 
+    # if the file already exists, do this:
+    if os.path.exists(CACHE_FILE):
+        print(f'Found cached file. Loading {os.path.basename(CACHE_FILE)}')
+        cube= xr.open_dataset(CACHE_FILE, chunks={'x': 1024, 'y': 1024})
+        epsg_code= cube.attrs.get('epsg_code') # get the saved epsg code
+        cube= cube.rio.set_spatial_dims(x_dim='x', y_dim='y') # tells rioxarray the spatial dimensions
+        cube.rio.write_crs(f'EPSG:{epsg_code}', inplace=True)
+        
+        return cube, epsg_code
+    
     valid_files = validate_hdf5_files() # get the valid files from the input directory
 
     print(f"Located {len(valid_files)} valid NISAR files.")
@@ -84,10 +99,12 @@ def load_time_series():
     
     datasets =[]
     epsg_code =None
+    gdf =gdp.read_files(STUDY_AREA) # use geopandas to read the study area
     
     # loop through the valid files and open them as xarray datasets, 
     # ensuring proper dimension naming and coordinate mapping
     for file_path in valid_files:
+        print(f'Loading and clipping:{os.path.basename(file_path)}')
         ds =xr.open_dataset(
             file_path, 
             engine="h5netcdf", 
@@ -99,20 +116,28 @@ def load_time_series():
         # do it only once - all files should have the same projection
         if epsg_code is None and 'projection' in ds:
             epsg_code= int(ds['projection'].values.item()) #gets tthe epsg code and converts to an integer
+            gdf = gdf.to_crs(f'EPSG:{epsg_code}')
         
         # rename dimensions to spatial dimensions (x and y) for georeferencing consistency
         dims = list(ds.dims)
         if len(dims) >= 2 and 'y' not in dims and 'x' not in dims:
             ds = ds.rename({dims[0]: 'y', dims[1]: 'x'})
             
-        # assign coordinates if they exist in the dataset
+        # assign coordinates based on the name they have in the dataset
         if 'yCoordinates' in ds and 'xCoordinates' in ds:
             ds = ds.assign_coords(y=ds['yCoordinates'], x=ds['xCoordinates'])
 
-        # chunk the dataset to optimize memory usage and processing speed    
-        ds = ds.chunk({'y':1024, 'x':1024})
+        # this keeps only the spatial variables (x and y) from the ds
+        spatial_vars = [var for var in ds.data_vars if 'x' in ds[var].dims]
+        ds_spatial=ds[spatial_vars]
+        ds_spatial= ds_spatial.rio.set_spatial_dims(x_dim='x', y_dim='y')
+        ds_spatial.rio.write_crs(f'EPSG:{epsg_code}', inplace=True)
 
-        datasets.append(ds)
+        # clip the ds to the shapefile of the study area to optimize calculations
+        ds_clipped= ds_spatial.rio.clip(gdf.geometry.apply(mapping), gdf.crs, drop=True)
+        ds_clipped = ds_clipped.chunk({'y':1024, 'x':1024}) # chunked daset to save memory
+
+        datasets.append(ds_clipped)
 
     # now that all the datasets are loaded, assign a new time dim based on the extracted timestamp
     for i in range(len(datasets)):
@@ -120,8 +145,13 @@ def load_time_series():
         
     print("Stacking datasets into a datacube")
 
-    # concatenate along the time dimension and sort by time
-    return xr.concat(datasets, dim='time').sortby('time'), epsg_code
+    # concatenate along the time dimension and sort by time including projection code
+    final_cube = xr.concat(datasets, dim='time').sortby('time')
+    final_cube.attrs['epsg_code']=epsg_code
+    final_cube.to_netcdf(CACHE_FILE, engine='h5netcdf')
+    print(f'NetCDF file saved: {CACHE_FILE}')
+    
+    return final_cube, epsg_code
 
 ################### COMPUTATION FUNCTIONS ##########################################################
 
@@ -189,28 +219,7 @@ def export_to_geotiff(mask, epsg_code, output_filepath):
     mask.rio.write_nodata(255, encoded=True, inplace=True)
     mask.rio.to_raster(output_filepath, tiled=True, windowed=True, lock=True, dtype="uint8")
 
-    print("GeoTIFF Export complete!")
-
-
-def clip_cube_to_shapefile(cube, STUDY_AREA, epsg_code):
-    print("Clipping Data Cube to Study Area")
-    
-    #Filter the dataset to keep variables that have x/y coordinates
-    spatial_vars = [var for var in cube.data_vars if 'x' in cube[var].dims]
-    cube_spatial = cube[spatial_vars]
-    
-    cube_spatial = cube_spatial.rio.set_spatial_dims(x_dim="x", y_dim="y")
-    cube_spatial.rio.write_crs(f"EPSG:{epsg_code}", inplace=True)
-    
-    #read and match radar data
-    gdf = gpd.read_file(STUDY_AREA)
-    gdf = gdf.to_crs(f"EPSG:{epsg_code}")
-    
-    # Clip the cube to the shapefile geometry
-    clipped_cube = cube_spatial.rio.clip(gdf.geometry.apply(mapping), gdf.crs, drop=True)
-    
-    print(f"Clipped shape!")
-    return clipped_cube
+    print("GeoTIFF Export complete!") 
 
 #################### MAIN FUNCTION ##########################################################
 
@@ -226,7 +235,6 @@ def main():
     try:
         #load the time series data and get the native EPSG code
         cube, native_epsg =load_time_series()
-        cube = clip_cube_to_shapefile(cube, STUDY_AREA, epsg_code=32724)
         
         #calculate metrics for both polarizations, returning cv maps and sampled arrays for plotting
         cv_hv_lazy,cv_hv_sample,var_hv_sample= compute_metrics(cube, "HVHV")
