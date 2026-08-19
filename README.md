@@ -16,6 +16,27 @@ Distinguish between dense vegetation (strong HV) and bare surface.
 The HH/HV ratio is used to distinguish open water from inundated vegetation.
 Observing how much they change over time allows us to identify crop areas (planting, growing, and cropping phases).
 
+## Crop/Non-Crop Mask
+This pipeline identifies and extracts active agricultural boundaries using multi-temporal SAR backscatter variability.
+1. Active croplands are identified using the Coefficient of Variation (CV) to measure temporal backscatter dynamics. The CV is calculated for both HH and HV polarizations as the standard deviation divided by the temporal mean:
+
+$$CV = \frac{\sigma}{\mu}$$
+
+2. Following the NISAR cookbook standards, a 5% cutoff threshold was applied to the CV arrays. The resulting mask isolates high-variation pixels into three distinct classes:
+
+* HV-only change (volume scattering variation)
+* HH-only change (surface roughness variation)
+* Dual-polarization change (highest probability of active cropping)
+
+3. The classified array was exported as a GeoTIFF and processed in ArcGIS Pro to generate clean vector geometries:
+
+* **Reclassification:** The 3-class raster was collapsed into a binary crop / non-crop mask.
+* **Majority Filter:** Was applied to reduce SAR speckle and bridge internal field seams (Parameters: Number of Neighbors = 8, Replacement Threshold = Half).
+* **Raster to Polygon:** The smoothed binary mask was converted into discrete vector features.
+  
+4. Polygons were filtered by size. Features with an area $\ge 20 \text{ ha}$ were classified as large-scale agribusiness (mapped in orange), while smaller geometries were classified as smallholder agriculture (mapped in blue).
+
+
 ## RGB Composites
 ### Multi-Temporal
 These are made by taking three dates (initial, middle, and final) and assigning them bands (red, green, blue) respectively.
